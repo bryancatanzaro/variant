@@ -13,7 +13,7 @@ support recursive variants, nor does it support variants of references.
 
 `variant`s are accessed by means of `static_visitor` classes that
 overload `operator()` for all types in the variant, and then are
-applied using `apply_visitor`, as shown in the example.  Compile-time
+applied using `apply_visitor()`, as shown in the example.  Compile-time
 errors result from trying to visit `variant`s with `static_visitor`s
 that do not provide overloads for all types in the `variant`. This is
 an important safety benefit.
