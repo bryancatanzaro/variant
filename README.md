@@ -1,3 +1,19 @@
+Variant
+===
+
+Boost provides
+[`boost::variant`](http://www.boost.org/doc/libs/1_53_0/doc/html/variant.html)
+to provide a type-checked discriminated union type.
+
+This library provides a simple `variant` type similar in concept to
+`boost::variant`, that works in CUDA, for use in GPU code.
+
+This type is not as fully featured as `boost::variant`.  It does not
+support recursive variants, nor does it support variants of references.
+
+Usage
+===
+```
 #include "variant.h"
 #include <iostream>
 #include <thrust/copy.h>
@@ -62,3 +78,4 @@ int main() {
     std::cout << "Truth      : 10 20" << std::endl;
     
 }
+```
