@@ -11,6 +11,20 @@ This library provides a simple `variant` type similar in concept to
 This type is not as fully featured as `boost::variant`.  It does not
 support recursive variants, nor does it support variants of references.
 
+`variant`s are accessed by means of `static_visitor` classes that
+overload `operator()` for all types in the variant, and then are
+applied using `apply_visitor`, as shown in the example.  Compile-time
+errors result from trying to visit `variant`s with `static_visitor`s
+that do not provide overloads for all types in the `variant`. This is
+an important safety benefit.
+
+We do not currently support a `get<T>` method to explicitly extract a
+type from the variant, since CUDA does not currently support
+exceptions, which are necessary for the case when the object held by
+the variant is not of type `T` as requested by `get<T>`.
+
+This variant is limited to 10 types.
+
 Usage
 ===
 ```c++
