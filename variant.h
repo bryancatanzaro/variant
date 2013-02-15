@@ -3,6 +3,12 @@
 #include "uninitialized.h"
 
 namespace variant {
+
+template<typename Result=void>
+struct static_visitor {
+    typedef Result result_type;
+};
+
 namespace detail {
 
 template<bool c, typename T, typename E>
@@ -31,6 +37,93 @@ union storage<cons<Head, Tail> > {
 
 template<>
 union storage<nil> {};
+
+
+template<typename Fn, typename H, typename T>
+__host__ __device__
+typename Fn::result_type unwrap_apply(Fn fn,
+                                      const detail::storage<
+                                          detail::cons<H, T> >& storage) {
+    return fn(storage.head);
+}
+
+template<typename Fn, typename H, typename T>
+__host__ __device__
+typename Fn::result_type unwrap_apply(Fn fn,
+                                      const detail::storage<
+                                          detail::cons<
+                                              detail::uninitialized<H>,
+                                              T> >& storage) {
+    return fn(storage.head.get());
+}
+
+
+
+
+template<typename Fn, typename Cons, int R=0>
+struct apply_to_variant{
+#pragma hd_warning_disable
+    template<typename S>
+    __host__ __device__
+    static typename Fn::result_type impl(Fn fn,
+                                         const S& storage,
+                                         const int& which) {
+        if (R == which) {
+            return unwrap_apply(fn, storage);
+        } else {
+            return typename Fn::result_type();
+        }
+    }
+
+    __host__ __device__
+    static typename Fn::result_type impl(Fn,
+                                         const detail::storage<detail::nil>&,
+                                         const int&) {
+        return typename Fn::result_type();
+    }
+    
+};
+
+template<typename Fn, typename Head, typename Tail, int R>
+struct apply_to_variant<Fn, cons<Head, Tail>, R> {
+
+#pragma hd_warning_disable
+    template<typename S>
+    __host__ __device__
+    static typename Fn::result_type impl(Fn fn,
+                                         const S& storage,
+                                         const int& which) {
+        if (R == which) {
+            return fn(storage.head);
+        } else {
+            return apply_to_variant<Fn, Tail, R+1>::impl(
+                fn, storage.tail, which);
+        }
+    }
+};
+
+template<typename Fn, typename Tail, int R>
+struct apply_to_variant<Fn, cons<nil, Tail>, R>{
+    template<typename S>
+    __host__ __device__
+    static typename Fn::result_type impl(Fn fn,
+                                         const S& storage,
+                                         const int& which) {
+        return typename Fn::result_type();
+    }
+};
+
+} //end namespace detail
+
+template<typename Fn, typename Variant>
+__host__ __device__
+typename Fn::result_type apply_visitor(Fn fn, const Variant& v) {
+    return detail::apply_to_variant<Fn,
+                                    typename Variant::cons_type>::impl(fn, v.m_storage, v.m_which);
+}
+
+
+namespace detail {
 
 template<typename T0, typename T1=nil,
          typename T2=nil, typename T3=nil,
@@ -200,6 +293,23 @@ struct destroy_storage<cons<Head, Tail>, R> {
         
 };
 
+template<typename S>
+struct copy_construct_variant : public static_visitor<void> {
+    typedef storage<S> storage_type;
+    storage_type& m_storage;
+    int& m_which;
+    __host__ __device__ copy_construct_variant(storage_type& storage,
+                                               int& which) :
+        m_storage(storage), m_which(which) {}
+    
+    template<typename V>
+    __host__ __device__
+    void operator()(const V& value) const {
+        initialize_storage<V, S>::impl(m_storage, m_which, value);
+    }
+};
+
+
 }
 
 template<typename T0,
@@ -211,7 +321,8 @@ template<typename T0,
 struct variant {
     typedef typename detail::cons_type<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>::type cons_type;
     typedef typename detail::wrapped<cons_type>::type wrapped_type;
-    detail::storage<wrapped_type> m_storage;
+    typedef detail::storage<wrapped_type> storage_type;
+    storage_type m_storage;
     int m_which;
 
 #pragma hd_warning_disable
@@ -229,6 +340,21 @@ struct variant {
     }
 
     __host__ __device__
+    variant(const variant& value) {
+        apply_visitor(detail::copy_construct_variant<wrapped_type>
+                      (m_storage, m_which), value);
+    }
+    
+    
+    template<typename S0, typename S1, typename S2, typename S3, typename S4,
+             typename S5, typename S6, typename S7, typename S8, typename S9>
+    __host__ __device__
+    variant(const variant<S0, S1, S2, S3, S4, S5, S6, S7, S8, S9>& value) {
+        apply_visitor(detail::copy_construct_variant<wrapped_type>
+                      (m_storage, m_which), value);
+    }
+
+    __host__ __device__
     ~variant() {
         detail::destroy_storage<wrapped_type>::impl(m_storage, m_which);
     }
@@ -236,6 +362,7 @@ struct variant {
     template<typename V>
     __host__ __device__
     variant& operator=(const V& value) {
+        detail::destroy_storage<wrapped_type>::impl(m_storage, m_which);
         detail::initialize_storage<V, wrapped_type>::impl(
             m_storage, m_which, value);
         return *this;
@@ -247,94 +374,5 @@ struct variant {
     }
 };
 
-template<typename Result=void>
-struct static_visitor {
-    typedef Result result_type;
-};
-
-namespace detail {
-
-template<typename Fn, typename H, typename T>
-__host__ __device__
-typename Fn::result_type unwrap_apply(Fn fn,
-                                      const detail::storage<
-                                          detail::cons<H, T> >& storage) {
-    return fn(storage.head);
-}
-
-template<typename Fn, typename H, typename T>
-__host__ __device__
-typename Fn::result_type unwrap_apply(Fn fn,
-                                      const detail::storage<
-                                          detail::cons<
-                                              detail::uninitialized<H>,
-                                              T> >& storage) {
-    return fn(storage.head.get());
-}
-
-
-
-
-template<typename Fn, typename Cons, int R=0>
-struct apply_to_variant{
-#pragma hd_warning_disable
-    template<typename S>
-    __host__ __device__
-    static typename Fn::result_type impl(Fn fn,
-                                         const S& storage,
-                                         const int& which) {
-        if (R == which) {
-            return unwrap_apply(fn, storage);
-        } else {
-            return typename Fn::result_type();
-        }
-    }
-
-    __host__ __device__
-    static typename Fn::result_type impl(Fn,
-                                         const detail::storage<detail::nil>&,
-                                         const int&) {
-        return typename Fn::result_type();
-    }
-    
-};
-
-template<typename Fn, typename Head, typename Tail, int R>
-struct apply_to_variant<Fn, cons<Head, Tail>, R> {
-
-#pragma hd_warning_disable
-    template<typename S>
-    __host__ __device__
-    static typename Fn::result_type impl(Fn fn,
-                                         const S& storage,
-                                         const int& which) {
-        if (R == which) {
-            return fn(storage.head);
-        } else {
-            return apply_to_variant<Fn, Tail, R+1>::impl(
-                fn, storage.tail, which);
-        }
-    }
-};
-
-template<typename Fn, typename Tail, int R>
-struct apply_to_variant<Fn, cons<nil, Tail>, R>{
-    template<typename S>
-    __host__ __device__
-    static typename Fn::result_type impl(Fn fn,
-                                         const S& storage,
-                                         const int& which) {
-        return typename Fn::result_type();
-    }
-};
-
-}
-
-template<typename Fn, typename Variant>
-__host__ __device__
-typename Fn::result_type apply_visitor(Fn fn, const Variant& v) {
-    return detail::apply_to_variant<Fn,
-                                    typename Variant::cons_type>::impl(fn, v.m_storage, v.m_which);
-}
 
 } //end namespace variant
