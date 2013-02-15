@@ -13,7 +13,7 @@ support recursive variants, nor does it support variants of references.
 
 Usage
 ===
-```
+```c++
 #include "variant.h"
 #include <iostream>
 #include <thrust/copy.h>
