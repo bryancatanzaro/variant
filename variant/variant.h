@@ -112,7 +112,7 @@ typename Fn::result_type unwrap_apply(Fn fn,
 
 
 template<typename Fn, typename Cons, int R=0, int L=cons_length<Cons>::value,
-         bool stop = R==L>
+         bool stop = R==L-1>
 struct apply_to_variant{};
 
 template<typename Fn, typename Head, typename Tail, int R, int L>
@@ -140,7 +140,7 @@ struct apply_to_variant<Fn, cons<Head, Tail>, R, L, true>{
     static typename Fn::result_type impl(Fn fn,
                                          const S& storage,
                                          const int& which) {
-        return typename Fn::result_type();
+        return unwrap_apply(fn, storage);
     }
 };
 
