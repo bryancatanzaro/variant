@@ -45,11 +45,11 @@ typedef variant::variant<int, foo> my_variant;
 struct my_visitor : public variant::static_visitor<int> {
     __host__ __device__
     int operator()(const int& i) const {
-        return i;
+        return i + 10;
     }
     __host__ __device__
     int operator()(const foo& i) const {
-        return i.o;
+        return i.o + 20;
     }
 };
 
@@ -63,14 +63,17 @@ struct extractor {
     }
 };
 
-int main() {
 
+
+
+int main() {
+    
     //Make a vector of variants on the GPU
     thrust::device_vector<my_variant> x(2);
 
     //Initialize their elements
-    x[0] = 10;
-    x[1] = foo(20);
+    x[0] = 1;
+    x[1] = foo(2);
     thrust::device_vector<int> y(2);
     //Visit the vector on the GPU
     thrust::transform(x.begin(), x.end(), y.begin(), extractor());
@@ -89,7 +92,7 @@ int main() {
     thrust::copy(h_y.begin(), h_y.end(), os);
     std::cout << std::endl;
 
-    std::cout << "Truth      : 10 20" << std::endl;
+    std::cout << "Truth      : 11 22" << std::endl;
     
 }
 ```
