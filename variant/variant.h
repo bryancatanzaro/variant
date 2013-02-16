@@ -106,6 +106,7 @@ struct flat_type {
 
 //These overloads call a function on an object held in storage
 //The object is unwrapped if it was wrapped due to being non-pod
+#pragma hd_warning_disable
 template<typename Fn, typename H, typename T>
 __host__ __device__
 typename Fn::result_type unwrap_apply(Fn fn,
@@ -114,6 +115,7 @@ typename Fn::result_type unwrap_apply(Fn fn,
     return fn(storage.head);
 }
 
+#pragma hd_warning_disable
 template<typename Fn, typename H, typename T>
 __host__ __device__
 typename Fn::result_type unwrap_apply(Fn fn,
