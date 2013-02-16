@@ -28,7 +28,7 @@ This variant is limited to 10 types.
 Usage
 ===
 ```c++
-#include "variant.h"
+#include <variant/variant.h>
 #include <iostream>
 #include <thrust/copy.h>
 #include <thrust/device_vector.h>
