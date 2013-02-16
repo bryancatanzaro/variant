@@ -9,28 +9,13 @@ struct reflector : public variant::static_visitor<> {
     }
 };
 
-struct converts_to_int {
-    int m_val;
-    converts_to_int(int val) : m_val(val) {}
-    operator int() const {
+template<typename T>
+struct converts_to_T {
+    T m_val;
+    converts_to_T(T val) : m_val(val) {}
+    operator T() const {
         return m_val;
     }
-};
-
-template<typename S0, typename S1>
-struct flat {
-  typedef S0 T0;
-  typedef S1 T1;
-};
-
-template<typename Flat>
-struct checker {
-  static void impl(const typename Flat::T0& i) {
-    std::cout << "T0" << std::endl;
-  }
-  static void impl(const typename Flat::T1& i) {
-    std::cout << "T1" << std::endl;
-  }
 };
 
 
@@ -51,7 +36,11 @@ int main() {
     variant::apply_visitor(reflect, x);
     x = (short)10;
     variant::apply_visitor(reflect, x);
-    x = converts_to_int(10);
+    x = converts_to_T<int>(10);
+    variant::apply_visitor(reflect, x);
+    x = converts_to_T<float>(10.0);
+    variant::apply_visitor(reflect, x);
+    x = converts_to_T<bool>(true);
     variant::apply_visitor(reflect, x);
     
     std::cout << std::endl << "True result: ";
@@ -61,6 +50,9 @@ int main() {
     reflect(true);
     reflect(10);
     reflect(10);
+    reflect(10.0f);
+    reflect(true);
+    
     std::cout << std::endl;
 
 }
