@@ -1,6 +1,6 @@
 #pragma once
 #include <thrust/detail/type_traits.h>
-#include "uninitialized.h"
+#include <variant/detail/uninitialized.h>
 
 namespace variant {
 

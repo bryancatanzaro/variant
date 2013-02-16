@@ -1,4 +1,4 @@
-#include "variant.h"
+#include <variant/variant.h>
 #include <iostream>
 #include <thrust/copy.h>
 #include <thrust/device_vector.h>
