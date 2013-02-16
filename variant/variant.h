@@ -217,11 +217,19 @@ struct unwrapped<uninitialized<T> > {
     typedef T type;
 };
 
-//Construct an object in storage
+//Construct or assign an object in storage
 //Optionally by invoking construct() on the wrapper
 //Or by assignment for POD
-template<typename Cons, typename V, int R, bool Wrapped>
-struct do_storage {
+//If assign is true, we're doing an assignment
+//If assign if false, we're copy constructing
+//If wrapped is true, storage.head holds uninitialized<V>
+//If wrapped if false, storage.head holds V
+template<bool assign, typename Cons, typename V, int R, bool Wrapped>
+struct do_storage {};
+
+template<typename Cons, typename V, int R>
+struct do_storage<false, Cons, V, R, true> {     
+#pragma hd_warning_disable
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which, const V& value) {
         storage.head.construct(value);
@@ -230,7 +238,17 @@ struct do_storage {
 };
 
 template<typename Cons, typename V, int R>
-struct do_storage<Cons, V, R, false> {
+struct do_storage<true, Cons, V, R, true> {
+#pragma hd_warning_disable
+    __host__ __device__
+    static void impl(storage<Cons>& storage, int& which, const V& value) {
+        storage.head = value;
+        which = R;
+    }
+};
+    
+template<bool assign, typename Cons, typename V, int R>
+struct do_storage<assign, Cons, V, R, false> {
 #pragma hd_warning_disable
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which, const V& value) {
@@ -241,20 +259,20 @@ struct do_storage<Cons, V, R, false> {
 
 //This loop indexes into the storage class to find the right
 //place to put the data.
-template<typename Cons, typename V, int D, int R=0, bool store=D==R>
+template<bool assign, typename Cons, typename V, int D, int R=0, bool store=D==R>
 struct iterate_do_storage {
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which, const V& value) {
-        do_storage<Cons, V, R, is_wrapped<typename Cons::head_type>::value>::
+        do_storage<assign, Cons, V, R, is_wrapped<typename Cons::head_type>::value>::
             impl(storage, which, value);
     }
 };
 
-template<typename Cons, typename V, int D, int R>
-struct iterate_do_storage<Cons, V, D, R, false> {
+template<bool assign, typename Cons, typename V, int D, int R>
+struct iterate_do_storage<assign, Cons, V, D, R, false> {
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which, const V& value) {
-        iterate_do_storage<typename Cons::tail_type, V, D, R+1>::
+        iterate_do_storage<assign, typename Cons::tail_type, V, D, R+1>::
             impl(storage.tail, which, value);
     }
 };
@@ -262,8 +280,9 @@ struct iterate_do_storage<Cons, V, D, R, false> {
 
 //Given the flat type list of variant, and the
 //wrapped, recursive form type list, initialize the storage
-template<typename Flat,
-         typename Cons>
+//If assign is true, we're doing an assignment
+//If assign is false, we're copy constructing
+template<bool assign, typename Flat, typename Cons>
 struct initialize_storage{
     typedef typename Flat::T0 T0;
     typedef typename Flat::T1 T1;
@@ -277,68 +296,68 @@ struct initialize_storage{
     typedef typename Flat::T9 T9;
     
     //All these overloads expose the complete set of types in the
-    //variant
+    //variant.
     //Accordingly, during assignment or initialization, the type stored
     //in the variant will be chosen by standard overload resolution
     //rules.
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which,
                      const T0& value) {
-        iterate_do_storage<Cons, T0, 0>::impl(storage, which, value);
+        iterate_do_storage<assign, Cons, T0, 0>::impl(storage, which, value);
     }
 
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which,
                      const T1& value) {
-        iterate_do_storage<Cons, T1, 1>::impl(storage, which, value);
+        iterate_do_storage<assign, Cons, T1, 1>::impl(storage, which, value);
     }
 
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which,
                      const T2& value) {
-        iterate_do_storage<Cons, T2, 2>::impl(storage, which, value);
+        iterate_do_storage<assign, Cons, T2, 2>::impl(storage, which, value);
     }
 
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which,
                      const T3& value) {
-        iterate_do_storage<Cons, T3, 3>::impl(storage, which, value);
+        iterate_do_storage<assign, Cons, T3, 3>::impl(storage, which, value);
     }
 
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which,
                      const T4& value) {
-        iterate_do_storage<Cons, T4, 4>::impl(storage, which, value);
+        iterate_do_storage<assign, Cons, T4, 4>::impl(storage, which, value);
     }
 
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which,
                      const T5& value) {
-        iterate_do_storage<Cons, T5, 5>::impl(storage, which, value);
+        iterate_do_storage<assign, Cons, T5, 5>::impl(storage, which, value);
     }
 
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which,
                      const T6& value) {
-        iterate_do_storage<Cons, T6, 6>::impl(storage, which, value);
+        iterate_do_storage<assign, Cons, T6, 6>::impl(storage, which, value);
     }
 
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which,
                      const T7& value) {
-        iterate_do_storage<Cons, T7, 7>::impl(storage, which, value);
+        iterate_do_storage<assign, Cons, T7, 7>::impl(storage, which, value);
     }
 
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which,
                      const T8& value) {
-        iterate_do_storage<Cons, T8, 8>::impl(storage, which, value);
+        iterate_do_storage<assign, Cons, T8, 8>::impl(storage, which, value);
     }
 
     __host__ __device__
     static void impl(storage<Cons>& storage, int& which,
                      const T9& value) {
-        iterate_do_storage<Cons, T9, 9>::impl(storage, which, value);
+        iterate_do_storage<assign, Cons, T9, 9>::impl(storage, which, value);
     }
 
 };
@@ -376,28 +395,28 @@ struct destroy_storage<cons<Head, Tail>, R> {
         
 };
 
-//Copy construction from another variant requires us to
+//Copy construction or assignment from another variant requires us to
 //visit the other variant.  Each type in the other variant
 //must be convertible to one of the types held in the destination
 //variant.  This visitor exposes all the types held in the other
 //variant, and calls initialize_storage for each one.
 
-//Errors here indicate that the variant being copied from
+//Errors here indicate that the variant being copied or assigned from
 //contains at least one type which is not convertible to
 //any types in the variant being copied to.
-template<typename Flat, typename Cons>
-struct copy_construct_variant : public static_visitor<void> {
+template<bool assign, typename Flat, typename Cons>
+struct initialize_from_variant : public static_visitor<void> {
     typedef storage<Cons> storage_type;
     storage_type& m_storage;
     int& m_which;
-    __host__ __device__ copy_construct_variant(storage_type& storage,
-                                               int& which) :
+    __host__ __device__
+        initialize_from_variant(storage_type& storage, int& which) :
         m_storage(storage), m_which(which) {}
     
     template<typename V>
     __host__ __device__
     void operator()(const V& value) const {
-        initialize_storage<Flat, Cons>::impl(m_storage, m_which, value);
+        initialize_storage<assign, Flat, Cons>::impl(m_storage, m_which, value);
     }
 };
 
@@ -424,20 +443,20 @@ struct variant {
 #pragma hd_warning_disable
     __host__ __device__
     variant() {
-        detail::initialize_storage<flat_type, wrapped_type>::impl(
+        detail::initialize_storage<false, flat_type, wrapped_type>::impl(
             m_storage, m_which, T0());
     }
     
     template<typename V>
     __host__ __device__
     variant(const V& value) {
-        detail::initialize_storage<flat_type, wrapped_type>::impl(
+        detail::initialize_storage<false, flat_type, wrapped_type>::impl(
             m_storage, m_which, value);
     }
 
     __host__ __device__
     variant(const variant& value) {
-        apply_visitor(detail::copy_construct_variant<flat_type, wrapped_type>
+        apply_visitor(detail::initialize_from_variant<false, flat_type, wrapped_type>
                       (m_storage, m_which), value);
     }
     
@@ -446,7 +465,7 @@ struct variant {
              typename S5, typename S6, typename S7, typename S8, typename S9>
     __host__ __device__
     variant(const variant<S0, S1, S2, S3, S4, S5, S6, S7, S8, S9>& value) {
-        apply_visitor(detail::copy_construct_variant<flat_type, wrapped_type>
+        apply_visitor(detail::initialize_from_variant<false, flat_type, wrapped_type>
                       (m_storage, m_which), value);
     }
 
@@ -459,11 +478,29 @@ struct variant {
     __host__ __device__
     variant& operator=(const V& value) {
         detail::destroy_storage<wrapped_type>::impl(m_storage, m_which);
-        detail::initialize_storage<flat_type, wrapped_type>::impl(
+        detail::initialize_storage<true, flat_type, wrapped_type>::impl(
             m_storage, m_which, value);
         return *this;
     }
-    
+
+    __host__ __device__
+    variant& operator=(const variant& value) {
+        detail::destroy_storage<wrapped_type>::impl(m_storage, m_which);
+        apply_visitor(detail::initialize_from_variant<true, flat_type, wrapped_type>
+                      (m_storage, m_which), value);
+        return *this;
+    }
+
+    template<typename S0, typename S1, typename S2, typename S3, typename S4,
+             typename S5, typename S6, typename S7, typename S8, typename S9>
+    __host__ __device__
+    variant& operator=(const variant<S0, S1, S2, S3, S4, S5, S6, S7, S8, S9>& value) {
+        detail::destroy_storage<wrapped_type>::impl(m_storage, m_which);
+        apply_visitor(detail::initialize_from_variant<true, flat_type, wrapped_type>
+                      (m_storage, m_which), value);
+        return *this;
+    }
+          
     __host__ __device__
     int which() const {
         return m_which;
