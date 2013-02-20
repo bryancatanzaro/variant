@@ -362,11 +362,12 @@ struct initialize_storage{
 
 };
 
-//These overloads call the destructor, if necessary
-//POD has no constructor, so destroy does nothing
+//These overloads call the destructor
 template<typename T>
 __host__ __device__
-void destroy(T&) {}
+void destroy(T& t) {
+    t.~T();
+}
 
 //Wrapped data has a destructor, call it through uninitialized
 template<typename T>
@@ -474,6 +475,7 @@ struct variant {
         detail::destroy_storage<wrapped_type>::impl(m_storage, m_which);
     }
 
+ #pragma hd_warning_disable
     template<typename V>
     __host__ __device__
     variant& operator=(const V& value) {
