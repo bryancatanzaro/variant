@@ -52,6 +52,8 @@ typedef variant::variant<int, foo> my_variant;
 //error if you try to access a variant type by a static_visitor
 //that does not know how to operate on all types which the
 //variant may contain.
+//The template argument for static_visitor is the type returned
+//by the visitor.
 struct my_visitor : public variant::static_visitor<int> {
     __host__ __device__
     int operator()(const int& i) const {
@@ -70,6 +72,10 @@ struct extractor {
     typedef int result_type;
     __host__ __device__
     int operator()(const my_variant& v) const {
+        //The actual access to the variant is done by
+        //calling apply_visitor, with two arguments:
+        //1. The static_visitor which operates on the variant
+        //2. The variant being accessed
         return variant::apply_visitor(my_visitor(), v);
     }
 };
