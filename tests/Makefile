@@ -8,3 +8,6 @@ side_effect: side_effect.cu
 
 conversions: conversions.cu
 	nvcc -arch=$(CUDA_ARCH) -I.. conversions.cu -o conversions
+
+nested: nested.cu
+	nvcc -arch=$(CUDA_ARCH) -I.. nested.cu -o nested
