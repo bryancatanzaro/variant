@@ -495,6 +495,8 @@ struct variant {
         return *this;
     }
 
+    //XXX WAR Thrust presenting references during copies
+    //More WAR may be necessary.
     template<typename P>
     __host__ __device__
     variant& operator=(const thrust::reference<variant, P>& ref) {
