@@ -30,11 +30,15 @@ struct variant_1_printer : public variant::static_visitor<> {
 
 
 int main() {
-    variant_1 x(1);
+    variant_1 x(10);
     variant::apply_visitor(variant_1_printer(), x); std::cout << std::endl;
     x = foo();
     variant::apply_visitor(variant_1_printer(), x); std::cout << std::endl;
     x = bar();
     variant::apply_visitor(variant_1_printer(), x); std::cout << std::endl;
 
+    std::cout << "Size of variant<foo, bar>: ";
+    std::cout << sizeof(variant_0) << std::endl;
+    std::cout << "Size of variant<variant<foo, bar>, int>: ";
+    std::cout << sizeof(variant_1) << std::endl;
 }

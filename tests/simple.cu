@@ -54,6 +54,9 @@ int main() {
    
 
     
+    // thrust::host_vector<my_variant> h_x(2);
+    // h_x[0] = 1;
+    // h_x[1] = foo(2);
     thrust::host_vector<my_variant> h_x = x;
     thrust::host_vector<int> h_y(2);
     //Visit the vector on the CPU
