@@ -1,7 +1,7 @@
-#pragma once
-#include <thrust/memory.h>
-#include <thrust/detail/type_traits.h>
+#include <type_traits>
+#include <utility>
 #include <variant/detail/uninitialized.h>
+#include <thrust/memory.h>
 
 namespace variant {
 
@@ -14,7 +14,6 @@ struct static_visitor {
 
 namespace detail {
 
-//Thrust doesn't provide if_
 template<bool c, typename T, typename E>
 struct if_ {
     typedef E type;
@@ -34,6 +33,29 @@ struct cons{
     typedef T tail_type;
 };
 
+//Derive the length of a type list
+template<typename Cons>
+struct cons_length {
+    typedef typename Cons::tail_type Tail;
+    static const int value = 1 + cons_length<Tail>::value;
+};
+
+template<>
+struct cons_length<nil> {
+    static const int value = 0;
+};
+
+//Create a type list from a set of types
+template<typename T, typename... Args>
+struct cons_type {
+    typedef cons<T, typename cons_type<Args...>::type> type;
+};
+
+template<typename T>
+struct cons_type<T> {
+    typedef cons<T, nil> type;
+};
+
 //We will store objects in a union.
 //non-pod data types will be wrapped
 //due to restrictions on what types can be
@@ -50,60 +72,37 @@ union storage<cons<Head, Tail> > {
 template<>
 union storage<nil> {};
 
-
-//To disambiguate constructors, we need a unique type for each
-//potential element of the variant, except the first, which is
-//guaranteed to exist.
-struct nil1 : public nil{};
-struct nil2 : public nil{};
-struct nil3 : public nil{};
-struct nil4 : public nil{};
-struct nil5 : public nil{};
-struct nil6 : public nil{};
-struct nil7 : public nil{};
-struct nil8 : public nil{};
-struct nil9 : public nil{};
-
-//Create a type list from a set of types
-template<typename T0, typename T1, typename T2, typename T3, typename T4,
-         typename T5, typename T6, typename T7, typename T8, typename T9>
-struct cons_type {
-    typedef cons<T0, cons<T1, cons<T2, cons<T3, cons<T4,
-            cons<T5, cons<T6, cons<T7, cons<T8, cons<T9, nil>
-            > > > > > > > > > type;
+template<int val>
+struct int_ {
+    static const int value = val;
 };
 
-//Derive the length of a type list
-template<typename Cons>
-struct cons_length {
-    static const int value = thrust::detail::is_convertible<
-        typename Cons::head_type, nil>::value ? 0 :
-    1 + cons_length<typename Cons::tail_type>::value;
+//Use the compiler to find all possible conversions and choose the best
+template<typename List, int idx=0>
+struct evaluator 
+    : public evaluator<typename List::tail_type, idx+1> {
+
+    using evaluator<typename List::tail_type, idx+1>::loc;
+    using evaluator<typename List::tail_type, idx+1>::type;
+
+    static int_<idx> loc(typename List::head_type);
+    static typename List::head_type type(typename List::head_type);
 };
 
-template<>
-struct cons_length<nil> {
-    static const int value = 0;
+template<int idx>
+struct evaluator<nil, idx> {
+    static int_<idx> loc(nil);
+    static nil type(nil);
 };
 
-//Store a flat set of types.
-//We use this only for construction: it allows us to use standard
-//overload resolution for conversions, to choose the best type a
-//variant will hold, given some type to store in it.
-template<typename S0, typename S1, typename S2, typename S3, typename S4,
-         typename S5, typename S6, typename S7, typename S8, typename S9>
-struct flat_type {
-    typedef S0 T0;
-    typedef S1 T1;
-    typedef S2 T2;
-    typedef S3 T3;
-    typedef S4 T4;
-    typedef S5 T5;
-    typedef S6 T6;
-    typedef S7 T7;
-    typedef S8 T8;
-    typedef S9 T9;
+template<typename T, typename List>
+struct nearest_type {
+    typedef decltype(evaluator<List>::loc(std::declval<T>())) loc;
+    static const int value = loc::value;
+    typedef decltype(evaluator<List>::type(std::declval<T>())) type;
 };
+
+
 
 //These overloads call a function on an object held in storage
 //The object is unwrapped if it was wrapped due to being non-pod
@@ -111,8 +110,8 @@ struct flat_type {
 template<typename Fn, typename H, typename T>
 __host__ __device__
 typename Fn::result_type unwrap_apply(Fn fn,
-                                      const detail::storage<
-                                          detail::cons<H, T> >& storage) {
+                                      const storage<
+                                          cons<H, T> >& storage) {
     return fn(storage.head);
 }
 
@@ -120,14 +119,12 @@ typename Fn::result_type unwrap_apply(Fn fn,
 template<typename Fn, typename H, typename T>
 __host__ __device__
 typename Fn::result_type unwrap_apply(Fn fn,
-                                      const detail::storage<
-                                          detail::cons<
-                                              detail::uninitialized<H>,
-                                              T> >& storage) {
+                                      const storage<
+                                          cons<
+                                              uninitialized<H>,
+                                      T> >& storage) {
     return fn(storage.head.get());
 }
-
-
 
 //Call a function on a variant
 template<typename Fn, typename Cons, int R=0, int L=cons_length<Cons>::value,
@@ -174,7 +171,6 @@ typename Fn::result_type apply_visitor(Fn fn, const Variant& v) {
         impl(fn, v.m_storage, v.m_which);
 }
 
-
 namespace detail {
 
 //Wrapping works around the restrictions on datatypes that can
@@ -184,9 +180,10 @@ namespace detail {
 template<typename T>
 struct wrapped {
     typedef typename if_<
-        thrust::detail::is_pod<T>::value ||
-        thrust::detail::is_convertible<T, nil>::value,
-        T, uninitialized<T> >::type type;
+        std::is_pod<T>::value ||
+        std::is_same<T, nil>::value,
+        T, 
+        uninitialized<T> >::type type;
 };
 
 template<typename H, typename T>
@@ -217,6 +214,14 @@ template<typename T>
 struct unwrapped<uninitialized<T> > {
     typedef T type;
 };
+
+template<typename H, typename T>
+struct unwrapped<cons<H, T> > {
+    typedef cons<
+        typename unwrapped<H>::type,
+        typename unwrapped<T>::type> type;
+};
+
 
 //Construct or assign an object in storage
 //Optionally by invoking construct() on the wrapper
@@ -278,89 +283,18 @@ struct iterate_do_storage<assign, Cons, V, D, R, false> {
     }
 };
 
-
-//Given the flat type list of variant, and the
-//wrapped, recursive form type list, initialize the storage
-//If assign is true, we're doing an assignment
-//If assign is false, we're copy constructing
-template<bool assign, typename Flat, typename Cons>
-struct initialize_storage{
-    typedef typename Flat::T0 T0;
-    typedef typename Flat::T1 T1;
-    typedef typename Flat::T2 T2;
-    typedef typename Flat::T3 T3;
-    typedef typename Flat::T4 T4;
-    typedef typename Flat::T5 T5;
-    typedef typename Flat::T6 T6;
-    typedef typename Flat::T7 T7;
-    typedef typename Flat::T8 T8;
-    typedef typename Flat::T9 T9;
-    
-    //All these overloads expose the complete set of types in the
-    //variant.
-    //Accordingly, during assignment or initialization, the type stored
-    //in the variant will be chosen by standard overload resolution
-    //rules.
-    __host__ __device__
-    static void impl(storage<Cons>& storage, char& which,
-                     const T0& value) {
-        iterate_do_storage<assign, Cons, T0, 0>::impl(storage, which, value);
-    }
+template<bool assign, typename V, typename Cons>
+struct initialize_storage {
+    typedef typename unwrapped<Cons>::type List;
+    typedef nearest_type<V, List> best_type;
+    typedef typename best_type::type T;
+    static const int best_idx = best_type::value;
 
     __host__ __device__
     static void impl(storage<Cons>& storage, char& which,
-                     const T1& value) {
-        iterate_do_storage<assign, Cons, T1, 1>::impl(storage, which, value);
+                     const T& value) {
+        iterate_do_storage<assign, Cons, T, best_idx>::impl(storage, which, value);
     }
-
-    __host__ __device__
-    static void impl(storage<Cons>& storage, char& which,
-                     const T2& value) {
-        iterate_do_storage<assign, Cons, T2, 2>::impl(storage, which, value);
-    }
-
-    __host__ __device__
-    static void impl(storage<Cons>& storage, char& which,
-                     const T3& value) {
-        iterate_do_storage<assign, Cons, T3, 3>::impl(storage, which, value);
-    }
-
-    __host__ __device__
-    static void impl(storage<Cons>& storage, char& which,
-                     const T4& value) {
-        iterate_do_storage<assign, Cons, T4, 4>::impl(storage, which, value);
-    }
-
-    __host__ __device__
-    static void impl(storage<Cons>& storage, char& which,
-                     const T5& value) {
-        iterate_do_storage<assign, Cons, T5, 5>::impl(storage, which, value);
-    }
-
-    __host__ __device__
-    static void impl(storage<Cons>& storage, char& which,
-                     const T6& value) {
-        iterate_do_storage<assign, Cons, T6, 6>::impl(storage, which, value);
-    }
-
-    __host__ __device__
-    static void impl(storage<Cons>& storage, char& which,
-                     const T7& value) {
-        iterate_do_storage<assign, Cons, T7, 7>::impl(storage, which, value);
-    }
-
-    __host__ __device__
-    static void impl(storage<Cons>& storage, char& which,
-                     const T8& value) {
-        iterate_do_storage<assign, Cons, T8, 8>::impl(storage, which, value);
-    }
-
-    __host__ __device__
-    static void impl(storage<Cons>& storage, char& which,
-                     const T9& value) {
-        iterate_do_storage<assign, Cons, T9, 9>::impl(storage, which, value);
-    }
-
 };
 
 //These overloads call the destructor
@@ -397,6 +331,7 @@ struct destroy_storage<cons<Head, Tail>, R> {
         
 };
 
+
 //Copy construction or assignment from another variant requires us to
 //visit the other variant.  Each type in the other variant
 //must be convertible to one of the types held in the destination
@@ -406,7 +341,7 @@ struct destroy_storage<cons<Head, Tail>, R> {
 //Errors here indicate that the variant being copied or assigned from
 //contains at least one type which is not convertible to
 //any types in the variant being copied to.
-template<bool assign, typename Flat, typename Cons>
+template<bool assign, typename Cons>
 struct initialize_from_variant : public static_visitor<void> {
     typedef storage<Cons> storage_type;
     storage_type& m_storage;
@@ -418,25 +353,17 @@ struct initialize_from_variant : public static_visitor<void> {
     template<typename V>
     __host__ __device__
     void operator()(const V& value) const {
-        initialize_storage<assign, Flat, Cons>::impl(m_storage, m_which, value);
+        initialize_storage<assign, V, Cons>::impl(m_storage, m_which, value);
     }
 };
 
 
-}
+} //end namespace detail
 
-//The variant itself
-template<typename T0,
-         typename T1=detail::nil1, typename T2=detail::nil2,
-         typename T3=detail::nil3, typename T4=detail::nil4,
-         typename T5=detail::nil5, typename T6=detail::nil6,
-         typename T7=detail::nil7, typename T8=detail::nil8,
-         typename T9=detail::nil9>
+template<typename T,
+         typename... Args>
 struct variant {
-    typedef typename
-    detail::cons_type<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9>::type cons_type;
-    typedef detail::flat_type<T0, T1, T2, T3, T4, T5, T6, T7, T8, T9> flat_type;
-    
+    typedef typename detail::cons_type<T, Args...>::type cons_type;
     typedef typename detail::wrapped<cons_type>::type wrapped_type;
     typedef detail::storage<wrapped_type> storage_type;
     storage_type m_storage;
@@ -445,30 +372,30 @@ struct variant {
 #pragma hd_warning_disable
     __host__ __device__
     variant() {
-        detail::initialize_storage<false, flat_type, wrapped_type>::impl(
-            m_storage, m_which, T0());
+        detail::initialize_storage<false, T, wrapped_type>::
+            impl(m_storage, m_which, T());
     }
-    
+
     template<typename V>
     __host__ __device__
     variant(const V& value) {
-        detail::initialize_storage<false, flat_type, wrapped_type>::impl(
-            m_storage, m_which, value);
+        detail::initialize_storage<false, V, wrapped_type>::
+            impl(m_storage, m_which, value);
     }
 
     __host__ __device__
     variant(const variant& value) {
-        apply_visitor(detail::initialize_from_variant<false, flat_type, wrapped_type>
-                      (m_storage, m_which), value);
+        apply_visitor(detail::initialize_from_variant<false, wrapped_type>(m_storage,
+                                                                           m_which),
+                      value);
     }
-    
-    
-    template<typename S0, typename S1, typename S2, typename S3, typename S4,
-             typename S5, typename S6, typename S7, typename S8, typename S9>
+
+    template<typename S, typename... SArgs>
     __host__ __device__
-    variant(const variant<S0, S1, S2, S3, S4, S5, S6, S7, S8, S9>& value) {
-        apply_visitor(detail::initialize_from_variant<false, flat_type, wrapped_type>
-                      (m_storage, m_which), value);
+    variant(const variant<S, SArgs...>& value) {
+        apply_visitor(detail::initialize_from_variant<false, wrapped_type>(m_storage,
+                                                                           m_which),
+                      value);
     }
 
     __host__ __device__
@@ -477,21 +404,32 @@ struct variant {
     }
 
 #pragma hd_warning_disable
-    template<typename T>
+    template<typename V>
     __host__ __device__
-    variant& operator=(const T& value) {
+    variant& operator=(const V& value) {
         detail::destroy_storage<wrapped_type>::impl(m_storage, m_which);
-        detail::initialize_storage<true, flat_type, wrapped_type>::impl(
-            m_storage, m_which, value);
+        detail::initialize_storage<true, V, wrapped_type>::impl(m_storage, 
+                                                                m_which, 
+                                                                value);
         return *this;
     }
 
-    
     __host__ __device__
     variant& operator=(const variant& value) {
         detail::destroy_storage<wrapped_type>::impl(m_storage, m_which);
-        apply_visitor(detail::initialize_from_variant<true, flat_type, wrapped_type>
-                      (m_storage, m_which), value);
+        apply_visitor(detail::initialize_from_variant<true, wrapped_type>(m_storage,
+                                                                          m_which),
+                      value);
+        return *this;
+    }
+
+    template<typename S, typename... SArgs>
+    __host__ __device__
+    variant& operator=(const variant<S, SArgs...>& value) {
+        detail::destroy_storage<wrapped_type>::impl(m_storage, m_which);
+        apply_visitor(detail::initialize_from_variant<true, wrapped_type>(m_storage,
+                                                                          m_which),
+                      value);
         return *this;
     }
 
@@ -501,26 +439,15 @@ struct variant {
     __host__ __device__
     variant& operator=(const thrust::reference<variant, P>& ref) {
         detail::destroy_storage<wrapped_type>::impl(m_storage, m_which);
-        apply_visitor(detail::initialize_from_variant<true, flat_type, wrapped_type>
+        apply_visitor(detail::initialize_from_variant<true, wrapped_type>
                       (m_storage, m_which), thrust::raw_reference_cast(ref));
         return *this;
     }
-    
-    template<typename S0, typename S1, typename S2, typename S3, typename S4,
-             typename S5, typename S6, typename S7, typename S8, typename S9>
-    __host__ __device__
-    variant& operator=(const variant<S0, S1, S2, S3, S4, S5, S6, S7, S8, S9>& value) {
-        detail::destroy_storage<wrapped_type>::impl(m_storage, m_which);
-        apply_visitor(detail::initialize_from_variant<true, flat_type, wrapped_type>
-                      (m_storage, m_which), value);
-        return *this;
-    }
-          
+
     __host__ __device__
     int which() const {
         return m_which;
     }
 };
-
-
+   
 } //end namespace variant
