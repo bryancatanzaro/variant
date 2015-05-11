@@ -13,10 +13,10 @@ This type is not as fully featured as `boost::variant`: it does not
 support recursive variants, nor does it support variants of references.
 However, it does support variants of non-POD data types, unlike C++03 unions.
 
-`variant`s are accessed by means of `static_visitor` classes that
+`variant`s are accessed by means of functor classes that
 overload `operator()` for all types in the variant, and then are
 applied using `apply_visitor()`, as shown in the example.  Compile-time
-errors result from trying to visit `variant`s with `static_visitor`s
+errors result from trying to visit `variant`s with functorss
 that do not provide overloads for all types in the `variant`. This is
 an important safety benefit.
 
@@ -45,14 +45,12 @@ struct foo{
 //Declare a variant type
 typedef variant::variant<int, foo> my_variant;
 
-//Accessing a variant type is done through a static_visitor
+//Accessing a variant type is done through a visitor functor.
 //This provides type safety: at compile time you will get an
-//error if you try to access a variant type by a static_visitor
+//error if you try to access a variant type by a functor.
 //that does not know how to operate on all types which the
 //variant may contain.
-//The template argument for static_visitor is the type returned
-//by the visitor.
-struct my_visitor : public variant::static_visitor<int> {
+struct my_visitor {
     __host__ __device__
     int operator()(const int& i) const {
         return i + 10;
