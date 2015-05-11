@@ -25,9 +25,7 @@ type from the variant, since CUDA does not currently support
 exceptions, which are necessary for the case when the object held by
 the variant is not of type `T` as requested by `get<T>()`.
 
-This variant is limited to 10 types.
-
-This code has been tested on Linux and Mac OS X, with nvcc 5.0 and g++ 4.6.
+This code has been tested on Linux, which NVCC 7.0 and g++ 4.8.
 
 Usage
 ===

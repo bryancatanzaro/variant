@@ -12,7 +12,7 @@ struct foo{
 
 typedef variant::variant<int, foo> my_variant;
 
-struct my_visitor : public variant::static_visitor<int> {
+struct my_visitor {
     __host__ __device__
     int operator()(const int& i) const {
         return i + 10;

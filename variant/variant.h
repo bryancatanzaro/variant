@@ -5,13 +5,6 @@
 
 namespace variant {
 
-//This is here by analogy to boost::static_visitor.
-//It could also be a std::unary_function or similar.
-template<typename Result=void>
-struct static_visitor {
-    typedef Result result_type;
-};
-
 namespace detail {
 
 template<bool c, typename T, typename E>
@@ -65,113 +58,14 @@ union storage;
 
 template<typename Head, typename Tail>
 union storage<cons<Head, Tail> > {
+    typedef Head head_type;
+    typedef Tail tail_type;
     Head head;
     storage<Tail> tail;
 };
 
 template<>
 union storage<nil> {};
-
-template<int val>
-struct int_ {
-    static const int value = val;
-};
-
-//Use the compiler to find all possible conversions and choose the best
-template<typename List, int idx=0>
-struct evaluator 
-    : public evaluator<typename List::tail_type, idx+1> {
-
-    using evaluator<typename List::tail_type, idx+1>::loc;
-    using evaluator<typename List::tail_type, idx+1>::type;
-
-    static int_<idx> loc(typename List::head_type);
-    static typename List::head_type type(typename List::head_type);
-};
-
-template<int idx>
-struct evaluator<nil, idx> {
-    static int_<idx> loc(nil);
-    static nil type(nil);
-};
-
-template<typename T, typename List>
-struct nearest_type {
-    typedef decltype(evaluator<List>::loc(std::declval<T>())) loc;
-    static const int value = loc::value;
-    typedef decltype(evaluator<List>::type(std::declval<T>())) type;
-};
-
-
-
-//These overloads call a function on an object held in storage
-//The object is unwrapped if it was wrapped due to being non-pod
-#pragma hd_warning_disable
-template<typename Fn, typename H, typename T>
-__host__ __device__
-typename Fn::result_type unwrap_apply(Fn fn,
-                                      const storage<
-                                          cons<H, T> >& storage) {
-    return fn(storage.head);
-}
-
-#pragma hd_warning_disable
-template<typename Fn, typename H, typename T>
-__host__ __device__
-typename Fn::result_type unwrap_apply(Fn fn,
-                                      const storage<
-                                          cons<
-                                              uninitialized<H>,
-                                      T> >& storage) {
-    return fn(storage.head.get());
-}
-
-//Call a function on a variant
-template<typename Fn, typename Cons, int R=0, int L=cons_length<Cons>::value,
-         bool stop = R==L-1>
-struct apply_to_variant{};
-
-template<typename Fn, typename Head, typename Tail, int R, int L>
-struct apply_to_variant<Fn, cons<Head, Tail>, R, L, false> {
-
-#pragma hd_warning_disable
-    template<typename S>
-    __host__ __device__
-    static typename Fn::result_type impl(Fn fn,
-                                         const S& storage,
-                                         const char& which) {
-        if (R == which) {
-            return unwrap_apply(fn, storage);
-        } else {
-            return apply_to_variant<Fn, Tail, R+1, L>::impl(
-                fn, storage.tail, which);
-        }
-    }
-};
-
-template<typename Fn, typename Head, typename Tail, int R, int L>
-struct apply_to_variant<Fn, cons<Head, Tail>, R, L, true>{
-    template<typename S>
-    __host__ __device__
-    static typename Fn::result_type impl(Fn fn,
-                                         const S& storage,
-                                         const char& which) {
-        return unwrap_apply(fn, storage);
-    }
-};
-
-} //end namespace detail
-
-//Apply visitor to variant
-template<typename Fn, typename Variant>
-__host__ __device__
-typename Fn::result_type apply_visitor(Fn fn, const Variant& v) {
-    return detail::apply_to_variant<Fn,
-                                    typename Variant::wrapped_type>::
-        impl(fn, v.m_storage, v.m_which);
-}
-
-namespace detail {
 
 //Wrapping works around the restrictions on datatypes that can
 //be placed in a union, by wrapping objects in an
@@ -221,6 +115,114 @@ struct unwrapped<cons<H, T> > {
         typename unwrapped<H>::type,
         typename unwrapped<T>::type> type;
 };
+
+template<int val>
+struct int_ {
+    static const int value = val;
+};
+
+//Use the compiler to find all possible conversions and choose the best
+template<typename List, int idx=0>
+struct evaluator 
+    : public evaluator<typename List::tail_type, idx+1> {
+
+    using evaluator<typename List::tail_type, idx+1>::loc;
+    using evaluator<typename List::tail_type, idx+1>::type;
+
+    static int_<idx> loc(typename List::head_type);
+    static typename List::head_type type(typename List::head_type);
+};
+
+template<int idx>
+struct evaluator<nil, idx> {
+    static int_<idx> loc(nil);
+    static nil type(nil);
+};
+
+template<typename T, typename List>
+struct nearest_type {
+    typedef decltype(evaluator<List>::loc(std::declval<T>())) loc;
+    static const int value = loc::value;
+    typedef decltype(evaluator<List>::type(std::declval<T>())) type;
+};
+
+
+
+//These overloads call a function on an object held in storage
+//The object is unwrapped if it was wrapped due to being non-pod
+#pragma hd_warning_disable
+template<typename Fn, typename H, typename T>
+__host__ __device__
+auto unwrap_apply(Fn fn,
+                  const storage<cons<H, T> >& storage) ->
+    decltype(fn(std::declval<H>()))
+{
+    return fn(storage.head);
+}
+
+#pragma hd_warning_disable
+template<typename Fn, typename H, typename T>
+__host__ __device__
+auto unwrap_apply(Fn fn,
+                  const storage<cons<uninitialized<H>, T>>& storage) ->
+    decltype(fn(std::declval<H>()))
+{
+    return fn(storage.head.get());
+}
+
+//Call a function on a variant
+template<typename Fn, typename Cons, int R=0, int L=cons_length<Cons>::value,
+         bool stop = R==L-1>
+struct apply_to_variant{};
+
+template<typename Fn, typename Head, typename Tail, int R, int L>
+struct apply_to_variant<Fn, cons<Head, Tail>, R, L, false> {
+
+#pragma hd_warning_disable
+    template<typename S>
+    __host__ __device__
+    static auto impl(Fn fn,
+                     const S& storage,
+                     const char& which) ->
+        decltype(fn(std::declval<typename unwrapped<typename S::head_type>::type>()))
+    {
+        if (R == which) {
+            return unwrap_apply(fn, storage);
+        } else {
+            return apply_to_variant<Fn, Tail, R+1, L>::impl(
+                fn, storage.tail, which);
+        }
+    }
+};
+
+template<typename Fn, typename Head, typename Tail, int R, int L>
+struct apply_to_variant<Fn, cons<Head, Tail>, R, L, true> {
+    template<typename S>
+    __host__ __device__
+    static auto impl(Fn fn,
+                     const S& storage,
+                     const char& which) ->
+        decltype(fn(std::declval<typename unwrapped<typename S::head_type>::type>()))
+    {
+        return unwrap_apply(fn, storage);
+    }
+};
+
+} //end namespace detail
+
+//Apply visitor to variant
+template<typename Fn, typename Variant>
+__host__ __device__
+auto apply_visitor(Fn fn, const Variant& v) -> 
+    decltype(fn(std::declval<typename Variant::cons_type::head_type>()))
+{
+    return detail::apply_to_variant<Fn,
+                                    typename Variant::wrapped_type>::
+        impl(fn, v.m_storage, v.m_which);
+}
+
+namespace detail {
+
 
 
 //Construct or assign an object in storage
@@ -342,7 +344,7 @@ struct destroy_storage<cons<Head, Tail>, R> {
 //contains at least one type which is not convertible to
 //any types in the variant being copied to.
 template<bool assign, typename Cons>
-struct initialize_from_variant : public static_visitor<void> {
+struct initialize_from_variant {
     typedef storage<Cons> storage_type;
     storage_type& m_storage;
     char& m_which;

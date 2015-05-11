@@ -7,7 +7,7 @@ struct bar{};
 typedef variant::variant<foo, bar> variant_0;
 typedef variant::variant<variant_0, int> variant_1;
 
-struct variant_0_printer : public variant::static_visitor<> {
+struct variant_0_printer {
     void operator()(const foo& x) const {
         std::cout << "foo";
     }
@@ -16,7 +16,7 @@ struct variant_0_printer : public variant::static_visitor<> {
     }
 };
 
-struct variant_1_printer : public variant::static_visitor<> {
+struct variant_1_printer {
     void operator()(const variant_0& x) const {
         std::cout << "variant_0: ";
         variant::apply_visitor(variant_0_printer(), x);

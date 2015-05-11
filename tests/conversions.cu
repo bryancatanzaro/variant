@@ -2,7 +2,7 @@
 #include <iostream>
 #include <typeinfo>
 
-struct reflector : public variant::static_visitor<> {
+struct reflector {
     template<typename T>
     void operator()(const T&) {
         std::cout << typeid(T).name();
