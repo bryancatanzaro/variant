@@ -4,6 +4,7 @@
 #include <utility>
 #include <variant/detail/uninitialized.h>
 #include <thrust/memory.h>
+#include <assert.h>
 
 namespace variant {
 
@@ -453,5 +454,37 @@ struct variant {
         return m_which;
     }
 };
+
+namespace detail {
+
+template<typename T>
+struct getter {
+
+    __host__ __device__
+    T operator()(T in) const {
+        return in;
+    }
+
+    template<typename X>
+    __host__ __device__
+    T operator()(X) const {
+#ifdef __CUDA_ARCH__
+        bool bad_get = false;
+        assert(bad_get);
+        return *static_cast<T*>(nullptr);
+#else
+        throw std::runtime_error("bad get");
+#endif
+    }
+
+};
+
+}
+
+template<typename T, typename Variant>
+__host__ __device__
+T get(const Variant& v) {
+    return apply_visitor(detail::getter<T>(), v);
+}
    
 } //end namespace variant

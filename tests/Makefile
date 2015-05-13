@@ -13,3 +13,6 @@ conversions: conversions.cu
 
 nested: nested.cu
 	nvcc -std=c++11 -arch=$(CUDA_ARCH) -I.. nested.cu -o nested
+
+get: get.cu
+	nvcc -std=c++11 -arch=$(CUDA_ARCH) -I.. get.cu -o get

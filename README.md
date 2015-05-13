@@ -16,14 +16,16 @@ However, it does support variants of non-POD data types, unlike C++03 unions.
 `variant`s are accessed by means of functor classes that
 overload `operator()` for all types in the variant, and then are
 applied using `apply_visitor()`, as shown in the example.  Compile-time
-errors result from trying to visit `variant`s with functorss
+errors result from trying to visit `variant`s with functors
 that do not provide overloads for all types in the `variant`. This is
 an important safety benefit.
 
-We do not currently support a `get<T>()` method to explicitly extract a
-type from the variant, since CUDA does not currently support
-exceptions, which are necessary for the case when the object held by
-the variant is not of type `T` as requested by `get<T>()`.
+To extract a known type `T` from a variant, use `variant::get<T>`.
+On the CPU, this will throw a `std::runtime_exception` if the variant
+currently contains a type other than `T`. 
+
+On the GPU, if `get<T>` fails at runtime, the program will be terminated -
+it is treated as a catastrophic error.
 
 This code has been tested on Linux, which NVCC 7.0 and g++ 4.8.
 
