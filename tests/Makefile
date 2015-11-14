@@ -16,3 +16,6 @@ nested: nested.cu
 
 get: get.cu
 	nvcc -std=c++11 -arch=$(CUDA_ARCH) -I.. get.cu -o get
+
+multivisitor: multivisitor.cu
+	nvcc -std=c++11 -arch=$(CUDA_ARCH) -I.. multivisitor.cu -o multivisitor
